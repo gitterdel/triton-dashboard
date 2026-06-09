@@ -256,6 +256,41 @@
   </div>
 </div>
 
+<div class="panel" style="margin-top:12px">
+  <h2 style="cursor:pointer;margin-bottom:0" onclick="toggleScreener()">
+    <span id="scr-arrow">▸</span> Eligible Universe Screener
+    <span class="hint">all 149 competition tokens · click headers to sort · updated hourly</span>
+  </h2>
+  <div id="screener-body" style="display:none;margin-top:12px">
+    <input id="scr-search" type="text" placeholder="Filter by symbol or name…" oninput="renderScreener()"
+      style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-family:var(--mono);font-size:12px;width:240px;margin-bottom:10px;outline:none" />
+    <div style="max-height:420px;overflow-y:auto">
+      <table>
+        <thead style="position:sticky;top:0;background:#11171f">
+          <tr>
+            <th onclick="sortScreener('sym')" style="cursor:pointer">#&nbsp;Token</th>
+            <th onclick="sortScreener('px')" style="cursor:pointer;text-align:right">Price</th>
+            <th onclick="sortScreener('mcap')" style="cursor:pointer;text-align:right">MCap ⇅</th>
+            <th onclick="sortScreener('p1h')" style="cursor:pointer;text-align:right">1h ⇅</th>
+            <th onclick="sortScreener('p24h')" style="cursor:pointer;text-align:right">24h ⇅</th>
+            <th onclick="sortScreener('p7d')" style="cursor:pointer;text-align:right">7d ⇅</th>
+            <th onclick="sortScreener('vol')" style="cursor:pointer;text-align:right">Vol 24h ⇅</th>
+          </tr>
+        </thead>
+        <tbody id="scr-rows"><tr><td colspan="7" class="empty">Waiting for agent data…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;align-items:center;gap:18px;justify-content:center;margin-top:22px;flex-wrap:wrap">
+  <span style="color:var(--dimmer);font-size:10px;letter-spacing:2px">POWERED BY</span>
+  <span style="font-weight:800;font-size:15px;color:#5e8bff;letter-spacing:0.3px">Ⓜ CoinMarketCap</span>
+  <span style="font-weight:800;font-size:15px;color:#4db5ff">🛡 Trust Wallet</span>
+  <span style="font-weight:800;font-size:15px;color:#f0b90b">◆ BNB CHAIN</span>
+  <span style="color:var(--dimmer);font-size:10px;letter-spacing:2px">· BNB HACK 2026</span>
+</div>
+
 <footer>
   <span>🧠 CMC Agent Hub</span><span class="sep">·</span>
   <span>🔐 Trust Wallet Agent Kit</span><span class="sep">·</span>
@@ -417,6 +452,7 @@ async function refresh() {
         row("Watchlist", o.watchlist.length + " eligible tokens");
     }
 
+    if (state.intel?.screener?.length) { scrData = state.intel.screener; renderScreener(); }
     if (state.intel) {
       const it = state.intel;
       const narr = (it.narratives || []).slice(0, 5).map((n) =>
@@ -447,6 +483,43 @@ async function refresh() {
 
     updateChart(equity || []);
   } catch (e) { console.error(e); }
+}
+
+/* ---------- eligible universe screener ---------- */
+let scrData = [], scrSort = { key: "mcap", dir: -1 };
+const WATCHSET = new Set(["ETH","CAKE","XRP","DOGE","ADA","LINK","AVAX","DOT","UNI","LTC","TWT","FET"]);
+
+function toggleScreener() {
+  const b = $("screener-body");
+  const open = b.style.display === "none";
+  b.style.display = open ? "" : "none";
+  $("scr-arrow").textContent = open ? "▾" : "▸";
+}
+
+function sortScreener(key) {
+  scrSort = { key, dir: scrSort.key === key ? -scrSort.dir : -1 };
+  renderScreener();
+}
+
+function fmtMcap(m) {
+  if (m >= 1e9) return "$" + (m / 1e9).toFixed(1) + "B";
+  if (m >= 1e6) return "$" + (m / 1e6).toFixed(0) + "M";
+  return m > 0 ? "$" + (m / 1e3).toFixed(0) + "K" : "—";
+}
+
+function renderScreener() {
+  if (!scrData.length) return;
+  const q = ($("scr-search").value || "").toUpperCase();
+  let rows = scrData.filter((r) => !q || r.sym.includes(q) || r.name.toUpperCase().includes(q));
+  rows.sort((a, b) => (a[scrSort.key] > b[scrSort.key] ? 1 : -1) * scrSort.dir);
+  $("scr-rows").innerHTML = rows.map((r, i) => `<tr>
+    <td><span class="dim num" style="display:inline-block;width:26px">${i + 1}</span><span class="sym">${r.sym}</span>${WATCHSET.has(r.sym) ? ' <span title="In Triton watchlist" style="color:var(--cyan)">●</span>' : ""} <span class="dim" style="font-size:11px">${r.name}</span></td>
+    <td class="num" style="text-align:right">${r.px >= 1 ? "$" + r.px.toFixed(2) : "$" + r.px.toFixed(5)}</td>
+    <td class="num" style="text-align:right">${fmtMcap(r.mcap)}</td>
+    <td class="num ${cls(r.p1h)}" style="text-align:right">${pct(r.p1h)}</td>
+    <td class="num ${cls(r.p24h)}" style="text-align:right">${pct(r.p24h)}</td>
+    <td class="num ${cls(r.p7d)}" style="text-align:right">${pct(r.p7d)}</td>
+    <td class="num dim" style="text-align:right">${fmtMcap(r.vol)}</td></tr>`).join("");
 }
 
 /* ---------- live prices via Binance public WebSocket ---------- */
