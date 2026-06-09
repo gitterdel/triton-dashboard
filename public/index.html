@@ -359,8 +359,8 @@ async function refresh() {
         row("Daily loss cap", "−" + (r.dailyLossCapPct * 100).toFixed(0) + "% → kill switch") +
         row("Max per position", (r.maxPositionPctOfPortfolio * 100).toFixed(0) + "% · max " + r.maxOpenPositions + " open") +
         row("Trade size", "$" + r.minTradeUsd + "–$" + r.maxTradeUsd + " · conf ≥ " + (r.minConfidenceToTrade * 100).toFixed(0) + "%") +
-        row("Momentum weights", "1h " + s.momentumWeights.h1 + " · 24h " + s.momentumWeights.h24 + " · 7d " + s.momentumWeights.d7) +
-        row("Buy threshold", "fear/greed " + s.regimes.fear.buyThreshold + " · neutral " + s.regimes.neutral.buyThreshold) +
+        row("Momentum weights", s.momentumWeights.h1 == null ? "multi-timeframe · 🔒 disclosed at submission" : "1h " + s.momentumWeights.h1 + " · 24h " + s.momentumWeights.h24 + " · 7d " + s.momentumWeights.d7) +
+        row("Buy threshold", s.regimes.fear.buyThreshold == null ? "regime-adaptive · 🔒 disclosed at submission" : "fear/greed " + s.regimes.fear.buyThreshold + " · neutral " + s.regimes.neutral.buyThreshold) +
         row("Buy confirmation", s.buyConfirmation.toLowerCase()) +
         row("Post-stop cooldown", "24h per token") +
         row("Loop", o.tickSeconds + "s full · " + o.fastCheckSeconds + "s stops") +
