@@ -259,7 +259,7 @@
 <div class="panel" style="margin-top:12px">
   <h2 style="cursor:pointer;margin-bottom:0" onclick="toggleScreener()">
     <span id="scr-arrow">▸</span> Eligible Universe Screener
-    <span class="hint">all 149 competition tokens · click headers to sort · updated hourly</span>
+    <span class="hint"><span class="livedot"></span>Binance-listed stream live · rest hourly via CMC · click headers to sort</span>
   </h2>
   <div id="screener-body" style="display:none;margin-top:12px">
     <input id="scr-search" type="text" placeholder="Filter by symbol or name…" oninput="renderScreener()"
@@ -514,13 +514,49 @@ function renderScreener() {
   rows.sort((a, b) => (a[scrSort.key] > b[scrSort.key] ? 1 : -1) * scrSort.dir);
   $("scr-rows").innerHTML = rows.map((r, i) => `<tr>
     <td><span class="dim num" style="display:inline-block;width:26px">${i + 1}</span><span class="sym">${r.sym}</span>${WATCHSET.has(r.sym) ? ' <span title="In Triton watchlist" style="color:var(--cyan)">●</span>' : ""} <span class="dim" style="font-size:11px">${r.name}</span></td>
-    <td class="num" style="text-align:right">${r.px >= 1 ? "$" + r.px.toFixed(2) : "$" + r.px.toFixed(5)}</td>
+    <td class="num" style="text-align:right" data-spx="${r.sym}">${r.px >= 1 ? "$" + r.px.toFixed(2) : "$" + r.px.toFixed(5)}</td>
     <td class="num" style="text-align:right">${fmtMcap(r.mcap)}</td>
     <td class="num ${cls(r.p1h)}" style="text-align:right">${pct(r.p1h)}</td>
-    <td class="num ${cls(r.p24h)}" style="text-align:right">${pct(r.p24h)}</td>
+    <td class="num ${cls(r.p24h)}" style="text-align:right" data-s24="${r.sym}">${pct(r.p24h)}</td>
     <td class="num ${cls(r.p7d)}" style="text-align:right">${pct(r.p7d)}</td>
     <td class="num dim" style="text-align:right">${fmtMcap(r.vol)}</td></tr>`).join("");
 }
+
+// Overlay en streaming: el stream global de Binance actualiza precio y 24h%
+// de los elegibles listados allí; el resto conserva el dato horario de CMC.
+let scrWs;
+function connectScreenerWs() {
+  scrWs = new WebSocket("wss://stream.binance.com:9443/ws/!miniTicker@arr");
+  scrWs.onmessage = (ev) => {
+    try {
+      if (!scrData.length) return;
+      const arr = JSON.parse(ev.data);
+      for (const t of arr) {
+        if (!t.s || !t.s.endsWith("USDT")) continue;
+        const sym = t.s.slice(0, -4);
+        const row = scrData.find((r) => r.sym === sym);
+        if (!row) continue;
+        const price = parseFloat(t.c), open = parseFloat(t.o);
+        const prev = row.px;
+        row.px = price;
+        row.p24h = open > 0 ? ((price - open) / open) * 100 : row.p24h;
+        const pxEl = document.querySelector(`[data-spx="${sym}"]`);
+        if (pxEl) {
+          pxEl.textContent = price >= 1 ? "$" + price.toFixed(2) : "$" + price.toFixed(5);
+          if (price !== prev) {
+            pxEl.classList.remove("flash-up", "flash-down"); void pxEl.offsetWidth;
+            pxEl.classList.add(price > prev ? "flash-up" : "flash-down");
+          }
+        }
+        const p24El = document.querySelector(`[data-s24="${sym}"]`);
+        if (p24El) { p24El.textContent = pct(row.p24h); p24El.className = "num " + cls(row.p24h); }
+      }
+    } catch {}
+  };
+  scrWs.onclose = () => setTimeout(connectScreenerWs, 5000);
+  scrWs.onerror = () => { try { scrWs.close(); } catch {} };
+}
+connectScreenerWs();
 
 /* ---------- live prices via Binance public WebSocket ---------- */
 const WATCH = ["ETH", "CAKE", "XRP", "DOGE", "ADA", "LINK", "AVAX", "DOT", "UNI", "LTC", "TWT", "FET"];
