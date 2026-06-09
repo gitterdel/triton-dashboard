@@ -186,6 +186,10 @@
       <div class="trend-chips" id="trending"><span class="empty">None of the watchlist is trending</span></div>
     </div>
     <div class="panel">
+      <h2>Market Intelligence <span class="hint">CMC Agent Hub · MCP</span></h2>
+      <div id="intel"><span class="empty">Loading intel…</span></div>
+    </div>
+    <div class="panel">
       <h2>Trade Quality</h2>
       <table>
         <tbody id="quality">
@@ -365,6 +369,18 @@ async function refresh() {
         row("Post-stop cooldown", "24h per token") +
         row("Loop", o.tickSeconds + "s full · " + o.fastCheckSeconds + "s stops") +
         row("Watchlist", o.watchlist.length + " eligible tokens");
+    }
+
+    if (state.intel) {
+      const it = state.intel;
+      const narr = (it.narratives || []).slice(0, 5).map((n) =>
+        `<span class="chip" title="${(n.keywords || []).join(", ")}">${n.name} <span class="${String(n.change24h).startsWith("-") ? "neg" : "pos"}">${n.change24h}</span></span>`).join(" ");
+      const evts = (it.macroEvents || []).map((e) => `<div class="reason">📅 ${e.date} — ${e.title}</div>`).join("");
+      const news = (it.news || []).map((n) => `<div class="reason">📰 ${n.url ? `<a target="_blank" href="${n.url}">${n.title}</a>` : n.title}</div>`).join("");
+      $("intel").innerHTML =
+        `<div style="margin-bottom:8px"><div class="dim" style="font-size:10px;letter-spacing:1px;margin-bottom:5px">TRENDING NARRATIVES</div><div class="trend-chips">${narr || '<span class="empty">—</span>'}</div></div>` +
+        (evts ? `<div style="margin-bottom:8px"><div class="dim" style="font-size:10px;letter-spacing:1px;margin-bottom:4px">MACRO CALENDAR</div>${evts}</div>` : "") +
+        (news ? `<div><div class="dim" style="font-size:10px;letter-spacing:1px;margin-bottom:4px">LATEST NEWS</div>${news}</div>` : "");
     }
 
     const trend = state.trending || [];
