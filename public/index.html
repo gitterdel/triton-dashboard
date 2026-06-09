@@ -487,7 +487,7 @@ async function refresh() {
 
 /* ---------- eligible universe screener ---------- */
 let scrData = [], scrSort = { key: "mcap", dir: -1 };
-const WATCHSET = new Set(["ETH","CAKE","XRP","DOGE","ADA","LINK","AVAX","DOT","UNI","LTC","TWT","FET"]);
+const WATCHSET = new Set(["ETH","CAKE","XRP","DOGE","ADA","LINK","AVAX","ATOM","LTC","TWT","FET"]);
 
 function toggleScreener() {
   const b = $("screener-body");
@@ -559,7 +559,7 @@ function connectScreenerWs() {
 connectScreenerWs();
 
 /* ---------- live prices via Binance public WebSocket ---------- */
-const WATCH = ["ETH", "CAKE", "XRP", "DOGE", "ADA", "LINK", "AVAX", "DOT", "UNI", "LTC", "TWT", "FET"];
+const WATCH = ["ETH", "CAKE", "XRP", "DOGE", "ADA", "LINK", "AVAX", "ATOM", "LTC", "TWT", "FET"];
 const livePrices = {}; // SYM -> { price, pct24h }
 
 function fmtPrice(p) {
