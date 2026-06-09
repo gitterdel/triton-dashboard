@@ -175,9 +175,16 @@
 <div class="grid">
   <div class="col">
     <div class="panel">
-      <h2>Live Chart <span class="hint"><span class="livedot"></span>5m candles · ▲▼ = agent entries/exits</span></h2>
+      <h2>Live Chart <span class="hint"><span class="livedot"></span>▲▼ = agent entries/exits · drag to pan, wheel to zoom</span></h2>
       <div class="symtabs" id="symtabs"></div>
-      <div id="candles" style="width:100%;height:300px"></div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+        <div class="symtabs" id="ivtabs" style="margin-bottom:0"></div>
+        <button class="symtab" id="autobtn" onclick="toggleAuto()" style="margin-left:auto">⟫ AUTO</button>
+      </div>
+      <div style="position:relative">
+        <div id="ohlc" style="position:absolute;top:6px;left:8px;z-index:5;font-family:var(--mono);font-size:11.5px;color:var(--dim)"></div>
+        <div id="candles" style="width:100%;height:340px"></div>
+      </div>
     </div>
     <div class="panel">
       <h2>Equity Curve <span class="hint" id="equityHint"></span></h2>
@@ -496,47 +503,104 @@ function connectWs() {
 }
 
 /* ---------- live candlestick chart with agent trade markers ---------- */
-let candleChart, candleSeries, currentSym = "CAKE", klineWs, lastHistory = [];
+let candleChart, candleSeries, volSeries, currentSym = "CAKE", currentIv = "5m", klineWs, lastHistory = [], autoFollow = true;
+const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
 function initCandles() {
   candleChart = LightweightCharts.createChart($("candles"), {
     layout: { background: { color: "transparent" }, textColor: "#5d7390", fontFamily: "JetBrains Mono" },
     grid: { vertLines: { color: "rgba(28,40,54,0.4)" }, horzLines: { color: "rgba(28,40,54,0.4)" } },
     rightPriceScale: { borderColor: "#1c2836" },
-    timeScale: { borderColor: "#1c2836", timeVisible: true, secondsVisible: false },
+    timeScale: { borderColor: "#1c2836", timeVisible: true, secondsVisible: false, rightOffset: 4 },
+    crosshair: { mode: 0 },
+    handleScroll: true, handleScale: true,
     autoSize: true,
   });
   candleSeries = candleChart.addCandlestickSeries({
     upColor: "#2ee58a", downColor: "#ff5470", borderUpColor: "#2ee58a", borderDownColor: "#ff5470",
     wickUpColor: "#2ee58a88", wickDownColor: "#ff547088",
   });
+  volSeries = candleChart.addHistogramSeries({
+    priceScaleId: "", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false,
+  });
+  candleChart.priceScale("").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+
   $("symtabs").innerHTML = WATCH.map((s) =>
     `<button class="symtab${s === currentSym ? " active" : ""}" id="st-${s}" onclick="selectSymbol('${s}')">${s}</button>`).join("");
+  $("ivtabs").innerHTML = INTERVALS.map((iv) =>
+    `<button class="symtab${iv === currentIv ? " active" : ""}" id="iv-${iv}" onclick="selectInterval('${iv}')">${iv.toUpperCase()}</button>`).join("");
+
+  // Si el usuario arrastra/zooma manualmente, desactivar el auto-seguimiento
+  $("candles").addEventListener("mousedown", () => setAuto(false));
+  $("candles").addEventListener("wheel", () => setAuto(false), { passive: true });
+
+  // Lectura OHLC bajo el cursor
+  candleChart.subscribeCrosshairMove((p) => {
+    const c = p?.seriesData?.get(candleSeries);
+    if (!c) { renderOhlcLast(); return; }
+    renderOhlc(c);
+  });
+  setAuto(true);
 }
+
+function renderOhlc(c) {
+  const chg = c.open ? ((c.close - c.open) / c.open) * 100 : 0;
+  $("ohlc").innerHTML = `<b style="color:#d7e2ee">${currentSym}/USDT · ${currentIv.toUpperCase()}</b>  ` +
+    `O <span class="num">${fmtPrice(c.open)}</span> H <span class="num">${fmtPrice(c.high)}</span> ` +
+    `L <span class="num">${fmtPrice(c.low)}</span> C <span class="num">${fmtPrice(c.close)}</span> ` +
+    `<span class="${chg >= 0 ? "pos" : "neg"}">${pct(chg)}</span>`;
+}
+let lastCandle = null;
+function renderOhlcLast() { if (lastCandle) renderOhlc(lastCandle); }
+
+function setAuto(on) {
+  autoFollow = on;
+  $("autobtn").classList.toggle("active", on);
+  if (on) candleChart.timeScale().scrollToRealTime();
+}
+function toggleAuto() { setAuto(!autoFollow); }
 
 async function selectSymbol(sym) {
   currentSym = sym;
-  document.querySelectorAll(".symtab").forEach((b) => b.classList.toggle("active", b.id === "st-" + sym));
-  try {
-    // Semilla: últimas 24h de velas de 5m (endpoint público con CORS)
-    const raw = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=5m&limit=288`).then((r) => r.json());
-    candleSeries.setData(raw.map((k) => ({
-      time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4],
-    })));
-    candleChart.timeScale().fitContent();
-  } catch (e) { console.error("klines", e); }
-  applyTradeMarkers();
-  subscribeKline(sym);
+  document.querySelectorAll("#symtabs .symtab").forEach((b) => b.classList.toggle("active", b.id === "st-" + sym));
+  await loadCandles();
 }
 
-function subscribeKline(sym) {
+async function selectInterval(iv) {
+  currentIv = iv;
+  document.querySelectorAll("#ivtabs .symtab").forEach((b) => b.classList.toggle("active", b.id === "iv-" + iv));
+  await loadCandles();
+}
+
+async function loadCandles() {
+  try {
+    const raw = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${currentSym}USDT&interval=${currentIv}&limit=500`).then((r) => r.json());
+    candleSeries.setData(raw.map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] })));
+    volSeries.setData(raw.map((k) => ({
+      time: Math.floor(k[0] / 1000), value: +k[5],
+      color: +k[4] >= +k[1] ? "rgba(46,229,138,0.35)" : "rgba(255,84,112,0.35)",
+    })));
+    lastCandle = raw.length ? { open: +raw.at(-1)[1], high: +raw.at(-1)[2], low: +raw.at(-1)[3], close: +raw.at(-1)[4] } : null;
+    renderOhlcLast();
+    if (autoFollow) { candleChart.timeScale().fitContent(); candleChart.timeScale().scrollToRealTime(); }
+  } catch (e) { console.error("klines", e); }
+  applyTradeMarkers();
+  subscribeKline();
+}
+
+function subscribeKline() {
   if (klineWs) { try { klineWs.close(); } catch {} }
-  klineWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym.toLowerCase()}usdt@kline_5m`);
+  klineWs = new WebSocket(`wss://stream.binance.com:9443/ws/${currentSym.toLowerCase()}usdt@kline_${currentIv}`);
   klineWs.onmessage = (ev) => {
     try {
       const { k } = JSON.parse(ev.data);
       if (!k) return;
-      candleSeries.update({ time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c });
+      const t = Math.floor(k.t / 1000);
+      candleSeries.update({ time: t, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
+      volSeries.update({ time: t, value: +k.v, color: +k.c >= +k.o ? "rgba(46,229,138,0.35)" : "rgba(255,84,112,0.35)" });
+      lastCandle = { open: +k.o, high: +k.h, low: +k.l, close: +k.c };
+      renderOhlcLast();
+      if (autoFollow) candleChart.timeScale().scrollToRealTime();
     } catch {}
   };
 }
