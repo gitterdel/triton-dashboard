@@ -186,6 +186,20 @@
       <div class="trend-chips" id="trending"><span class="empty">None of the watchlist is trending</span></div>
     </div>
     <div class="panel">
+      <h2>Trade Quality</h2>
+      <table>
+        <tbody id="quality">
+          <tr><td class="dim">Avg win</td><td class="num" id="avgwin">—</td></tr>
+          <tr><td class="dim">Avg loss</td><td class="num" id="avgloss">—</td></tr>
+          <tr><td class="dim">Profit factor</td><td class="num" id="pfactor">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Agent Parameters <span class="hint">risk lives in code, not config</span></h2>
+      <table><tbody id="params"></tbody></table>
+    </div>
+    <div class="panel">
       <h2>Risk Manager — Blocked <span class="hint">the strategy proposes, risk disposes</span></h2>
       <table>
         <thead><tr><th>Token</th><th>Intent</th><th>Why blocked</th></tr></thead>
@@ -328,6 +342,30 @@ async function refresh() {
     $("blocked").innerHTML = (state.blocked && state.blocked.length)
       ? state.blocked.map((b) => `<tr><td class="sym">${b.symbol}</td><td class="act-${b.action}">${b.action}</td><td class="reason">${b.why}</td></tr>`).join("")
       : '<tr><td colspan="3" class="empty">Nothing blocked this tick</td></tr>';
+
+    $("avgwin").textContent = p.avgWinUsd != null ? usd(p.avgWinUsd) : "—";
+    $("avgwin").className = "num pos";
+    $("avgloss").textContent = p.avgLossUsd != null ? usd(p.avgLossUsd) : "—";
+    $("avgloss").className = "num neg";
+    $("pfactor").textContent = p.profitFactor != null ? p.profitFactor.toFixed(2) + "×" : "—";
+    $("pfactor").className = "num " + ((p.profitFactor ?? 1) >= 1 ? "pos" : "neg");
+
+    if (state.params) {
+      const r = state.params.risk, s = state.params.strategy, o = state.params.ops;
+      const row = (k, v) => `<tr><td class="dim">${k}</td><td class="num" style="text-align:right">${v}</td></tr>`;
+      $("params").innerHTML =
+        row("Stop-loss", "−" + (r.stopLossPct * 100).toFixed(0) + "%") +
+        row("Trailing stop", "−" + (r.trailingStopPct * 100).toFixed(0) + "% from peak (arms at +" + (r.trailingActivationPct * 100).toFixed(0) + "%)") +
+        row("Daily loss cap", "−" + (r.dailyLossCapPct * 100).toFixed(0) + "% → kill switch") +
+        row("Max per position", (r.maxPositionPctOfPortfolio * 100).toFixed(0) + "% · max " + r.maxOpenPositions + " open") +
+        row("Trade size", "$" + r.minTradeUsd + "–$" + r.maxTradeUsd + " · conf ≥ " + (r.minConfidenceToTrade * 100).toFixed(0) + "%") +
+        row("Momentum weights", "1h " + s.momentumWeights.h1 + " · 24h " + s.momentumWeights.h24 + " · 7d " + s.momentumWeights.d7) +
+        row("Buy threshold", "fear/greed " + s.regimes.fear.buyThreshold + " · neutral " + s.regimes.neutral.buyThreshold) +
+        row("Buy confirmation", s.buyConfirmation.toLowerCase()) +
+        row("Post-stop cooldown", "24h per token") +
+        row("Loop", o.tickSeconds + "s full · " + o.fastCheckSeconds + "s stops") +
+        row("Watchlist", o.watchlist.length + " eligible tokens");
+    }
 
     const trend = state.trending || [];
     $("trending").innerHTML = trend.length
