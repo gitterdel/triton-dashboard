@@ -275,6 +275,8 @@
             <th onclick="sortScreener('p24h')" style="cursor:pointer;text-align:right">24h ⇅</th>
             <th onclick="sortScreener('p7d')" style="cursor:pointer;text-align:right">7d ⇅</th>
             <th onclick="sortScreener('vol')" style="cursor:pointer;text-align:right">Vol 24h ⇅</th>
+            <th onclick="sortScreener('bot')" style="cursor:pointer;text-align:right" title="Simulated: Triton engine trading ONLY this token, last 28d">Bot 28d ⇅</th>
+            <th style="text-align:right" title="Win rate of the simulation">Bot WR</th>
           </tr>
         </thead>
         <tbody id="scr-rows"><tr><td colspan="7" class="empty">Waiting for agent data…</td></tr></tbody>
@@ -452,7 +454,17 @@ async function refresh() {
         row("Watchlist", o.watchlist.length + " eligible tokens");
     }
 
-    if (state.intel?.screener?.length) { scrData = state.intel.screener; renderScreener(); }
+    if (state.intel?.screener?.length) {
+      scrData = state.intel.screener;
+      const bs = state.intel.botScan?.results || {};
+      for (const r of scrData) {
+        const b = bs[r.sym];
+        r.bot = b ? b.ret : null;
+        r.botWr = b ? b.wr : null;
+        r.botTrades = b ? b.trades : 0;
+      }
+      renderScreener();
+    }
     if (state.intel) {
       const it = state.intel;
       const narr = (it.narratives || []).slice(0, 5).map((n) =>
@@ -519,7 +531,9 @@ function renderScreener() {
     <td class="num ${cls(r.p1h)}" style="text-align:right">${pct(r.p1h)}</td>
     <td class="num ${cls(r.p24h)}" style="text-align:right" data-s24="${r.sym}">${pct(r.p24h)}</td>
     <td class="num ${cls(r.p7d)}" style="text-align:right">${pct(r.p7d)}</td>
-    <td class="num dim" style="text-align:right">${fmtMcap(r.vol)}</td></tr>`).join("");
+    <td class="num dim" style="text-align:right">${fmtMcap(r.vol)}</td>
+    <td class="num ${r.bot == null ? "dim" : cls(r.bot)}" style="text-align:right">${r.bot == null ? "—" : pct(r.bot)}</td>
+    <td class="num dim" style="text-align:right">${r.botWr == null ? "—" : r.botWr.toFixed(0) + "% (" + r.botTrades + "t)"}</td></tr>`).join("");
 }
 
 // Overlay en streaming: el stream global de Binance actualiza precio y 24h%
