@@ -315,6 +315,9 @@ const usd = (n) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, m
 const pct = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
 const cls = (n) => (n >= 0 ? "pos" : "neg");
 
+/* ---------- charts in LOCAL time (lightweight-charts rotula en UTC; desplazamos los timestamps al huso del visitante) ---------- */
+const tzShift = (utcSec) => utcSec - new Date().getTimezoneOffset() * 60;
+
 /* ---------- equity chart (lightweight-charts) ---------- */
 let chart, series;
 function initChart() {
@@ -338,7 +341,7 @@ function updateChart(points) {
   const data = [];
   let lastT = 0;
   for (const p of points) {
-    const t = Math.floor(new Date(p.t).getTime() / 1000);
+    const t = tzShift(Math.floor(new Date(p.t).getTime() / 1000));
     if (t > lastT) { data.push({ time: t, value: p.totalUsd }); lastT = t; }
   }
   series.setData(data);
@@ -346,7 +349,7 @@ function updateChart(points) {
   series.setMarkers(
     lastHistory
       .map((f) => ({
-        time: Math.floor(new Date(f.executedAt).getTime() / 1000),
+        time: tzShift(Math.floor(new Date(f.executedAt).getTime() / 1000)),
         position: f.order.side === "BUY" ? "belowBar" : "aboveBar",
         shape: f.order.side === "BUY" ? "arrowUp" : "arrowDown",
         color: f.order.side === "BUY" ? "#2ee58a" : "#ff5470",
@@ -759,9 +762,9 @@ async function selectInterval(iv) {
 async function loadCandles() {
   try {
     const raw = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${currentSym}USDT&interval=${currentIv}&limit=500`).then((r) => r.json());
-    candleSeries.setData(raw.map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] })));
+    candleSeries.setData(raw.map((k) => ({ time: tzShift(Math.floor(k[0] / 1000)), open: +k[1], high: +k[2], low: +k[3], close: +k[4] })));
     volSeries.setData(raw.map((k) => ({
-      time: Math.floor(k[0] / 1000), value: +k[5],
+      time: tzShift(Math.floor(k[0] / 1000)), value: +k[5],
       color: +k[4] >= +k[1] ? "rgba(46,229,138,0.35)" : "rgba(255,84,112,0.35)",
     })));
     lastCandle = raw.length ? { open: +raw.at(-1)[1], high: +raw.at(-1)[2], low: +raw.at(-1)[3], close: +raw.at(-1)[4] } : null;
@@ -780,7 +783,7 @@ function subscribeKline() {
     try {
       const { k } = JSON.parse(ev.data);
       if (!k) return;
-      const t = Math.floor(k.t / 1000);
+      const t = tzShift(Math.floor(k.t / 1000));
       candleSeries.update({ time: t, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
       volSeries.update({ time: t, value: +k.v, color: +k.c >= +k.o ? "rgba(46,229,138,0.35)" : "rgba(255,84,112,0.35)" });
       lastCandle = { open: +k.o, high: +k.h, low: +k.l, close: +k.c };
@@ -794,7 +797,7 @@ function applyTradeMarkers() {
   const markers = lastHistory
     .filter((f) => f.order.symbol === currentSym)
     .map((f) => ({
-      time: Math.floor(new Date(f.executedAt).getTime() / 1000),
+      time: tzShift(Math.floor(new Date(f.executedAt).getTime() / 1000)),
       position: f.order.side === "BUY" ? "belowBar" : "aboveBar",
       shape: f.order.side === "BUY" ? "arrowUp" : "arrowDown",
       color: f.order.side === "BUY" ? "#2ee58a" : "#ff5470",
