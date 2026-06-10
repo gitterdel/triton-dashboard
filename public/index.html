@@ -51,6 +51,12 @@
   .pill.mode-live .dot { background: var(--green); animation: pulse 1.6s infinite; }
   .pill.erc { color: var(--cyan); border-color: rgba(65, 199, 255, 0.35); }
   .pill.kill { color: var(--red); border-color: var(--red); animation: blink 1s infinite; }
+  .pill.st-ok { color: var(--green); border-color: rgba(46, 229, 138, 0.55); background: rgba(46, 229, 138, 0.07); font-weight: 700; }
+  .pill.st-ok .dot { background: var(--green); animation: pulse 1.6s infinite; }
+  .pill.st-warn { color: var(--amber); border-color: var(--amber); font-weight: 700; }
+  .pill.st-warn .dot { background: var(--amber); animation: blink 1s infinite; }
+  .pill.st-down { color: var(--red); border-color: var(--red); font-weight: 700; animation: blink 1.2s infinite; }
+  .pill.st-down .dot { background: var(--red); }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(46, 229, 138, 0.15); } }
   @keyframes blink { 50% { opacity: 0.35; } }
   .head-right { margin-left: auto; text-align: right; }
@@ -150,6 +156,7 @@
     <span>Autonomous Trading Agent · BSC</span>
   </div>
   <div class="pills">
+    <span id="agentstatus" class="pill st-warn"><span class="dot"></span>AGENT: CONNECTING…</span>
     <span id="mode" class="pill mode-paper"><span class="dot"></span>PAPER</span>
     <a class="pill erc" target="_blank" href="https://testnet.bscscan.com/tx/0xa335f23f086b90f770d810f8508de4d92045b8a673049f6d8daf814ad2360c35" title="ERC-8004 on-chain identity">⬡ ERC-8004 #1335</a>
     <a class="pill" target="_blank" href="https://bscscan.com/address/0x111Be0cD38B05B56253b4b7B5F3F39f6a64cEfc7" title="Agent wallet on BSC">⛓ 0x111B…Efc7</a>
@@ -367,6 +374,27 @@ function drawGauge(value) {
     `<circle cx="${cx}" cy="${cy}" r="5" fill="#d7e2ee"/>`;
 }
 
+/* ---------- agent health status ---------- */
+let lastTickTs = 0;
+function updateAgentStatus() {
+  const el = $("agentstatus");
+  if (!lastTickTs) return;
+  const ageS = Math.round((Date.now() - lastTickTs) / 1000);
+  const ageTxt = ageS < 90 ? ageS + "s" : Math.round(ageS / 60) + "m";
+  $("last").textContent = "last tick " + ageTxt + " ago";
+  if (ageS < 420) {
+    el.className = "pill st-ok";
+    el.innerHTML = '<span class="dot"></span>AGENT ONLINE · ' + ageTxt;
+  } else if (ageS < 1200) {
+    el.className = "pill st-warn";
+    el.innerHTML = '<span class="dot"></span>AGENT DELAYED · ' + ageTxt;
+  } else {
+    el.className = "pill st-down";
+    el.innerHTML = '<span class="dot"></span>⚠ AGENT OFFLINE · ' + ageTxt;
+  }
+}
+setInterval(updateAgentStatus, 10000);
+
 /* ---------- countdown ---------- */
 const LIVE_START = Date.parse("2026-06-22T00:00:00Z");
 const LIVE_END = Date.parse("2026-06-29T00:00:00Z");
@@ -393,8 +421,8 @@ async function refresh() {
     $("mode").className = "pill " + (paper ? "mode-paper" : "mode-live");
     $("mode").innerHTML = '<span class="dot"></span>' + (paper ? "PAPER REHEARSAL" : "LIVE ON BSC");
     $("kill").style.display = state.killSwitchActive ? "" : "none";
-    const ago = Math.round((Date.now() - new Date(state.lastTick).getTime()) / 1000);
-    $("last").textContent = "last tick " + (ago < 90 ? ago + "s ago" : Math.round(ago / 60) + "m ago");
+    lastTickTs = new Date(state.lastTick).getTime();
+    updateAgentStatus();
 
     const p = state.portfolio;
     $("total").textContent = usd(p.totalUsd);
