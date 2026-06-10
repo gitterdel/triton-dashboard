@@ -342,6 +342,18 @@ function updateChart(points) {
     if (t > lastT) { data.push({ time: t, value: p.totalUsd }); lastT = t; }
   }
   series.setData(data);
+  // Marcas de trades sobre la curva de equity
+  series.setMarkers(
+    lastHistory
+      .map((f) => ({
+        time: Math.floor(new Date(f.executedAt).getTime() / 1000),
+        position: f.order.side === "BUY" ? "belowBar" : "aboveBar",
+        shape: f.order.side === "BUY" ? "arrowUp" : "arrowDown",
+        color: f.order.side === "BUY" ? "#2ee58a" : "#ff5470",
+        text: f.order.symbol,
+      }))
+      .sort((a, b) => a.time - b.time),
+  );
   chart.timeScale().fitContent();
   const first = data[0].value, last = data[data.length - 1].value;
   const up = last >= first;
@@ -415,7 +427,9 @@ async function refresh() {
     const { state, history, equity } = await fetch("/api/state").then((r) => r.json());
     if (!state) return;
     lastHistory = history || [];
+    lastState = state;
     applyTradeMarkers();
+    applyAgentLevels(state);
 
     const paper = state.executionMode === "paper";
     $("mode").className = "pill " + (paper ? "mode-paper" : "mode-live");
@@ -666,7 +680,7 @@ function connectWs() {
 }
 
 /* ---------- live candlestick chart with agent trade markers ---------- */
-let candleChart, candleSeries, volSeries, currentSym = "CAKE", currentIv = "5m", klineWs, lastHistory = [], autoFollow = true;
+let candleChart, candleSeries, volSeries, currentSym = "CAKE", currentIv = "5m", klineWs, lastHistory = [], lastState = null, autoFollow = true;
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
 function initCandles() {
@@ -748,6 +762,7 @@ async function loadCandles() {
     if (autoFollow) { candleChart.timeScale().fitContent(); candleChart.timeScale().scrollToRealTime(); }
   } catch (e) { console.error("klines", e); }
   applyTradeMarkers();
+  applyAgentLevels(lastState);
   subscribeKline();
 }
 
@@ -780,6 +795,29 @@ function applyTradeMarkers() {
     }))
     .sort((a, b) => a.time - b.time);
   candleSeries.setMarkers(markers);
+}
+
+// Líneas de niveles del robot sobre el gráfico del símbolo seleccionado:
+// con posición abierta -> ENTRY / STOP / TARGET·PEAK; sin posición -> el
+// máximo de 48h que vigila el módulo breakout.
+let priceLines = [];
+function applyAgentLevels(state) {
+  for (const l of priceLines) { try { candleSeries.removePriceLine(l); } catch {} }
+  priceLines = [];
+  if (!state) return;
+  const mk = (price, color, title, style) =>
+    priceLines.push(candleSeries.createPriceLine({ price, color, lineWidth: 1, lineStyle: style ?? 2, axisLabelVisible: true, title }));
+
+  const pos = (state.portfolio?.positions || []).find((p) => p.symbol === currentSym);
+  if (pos) {
+    mk(pos.avgEntryUsd, "#41c7ff", "ENTRY");
+    if (pos.stopUsd) mk(pos.stopUsd, "#ff5470", pos.strategy === "range" ? "STOP -3%" : "STOP");
+    if (pos.strategy === "range") mk(pos.avgEntryUsd * 1.03, "#2ee58a", "TARGET +3%");
+    else if (pos.peakUsd && pos.peakUsd > pos.avgEntryUsd) mk(pos.peakUsd, "#8b7cf6", "PEAK", 3);
+  } else {
+    const hi = state.high48h?.[currentSym];
+    if (hi) mk(hi, "#5d7390", "48h HIGH · breakout lvl", 3);
+  }
 }
 
 initChart();
