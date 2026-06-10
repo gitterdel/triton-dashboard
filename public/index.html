@@ -416,6 +416,18 @@ async function refresh() {
       ? p.positions.map((x) => `<tr><td class="sym">${x.symbol}</td><td class="num">${x.qty.toFixed(5)}</td><td class="num">${usd(x.avgEntryUsd)}</td><td class="num">${usd(x.currentUsd)}</td><td class="num ${cls(x.pnlPct)}">${pct(x.pnlPct)}</td></tr>`).join("")
       : '<tr><td colspan="5" class="empty">In cash — discipline is a position</td></tr>';
 
+    // Fallback de la cinta: símbolos sin stream de Binance usan el precio CMC del agente
+    for (const d of state.decisions) {
+      if (!livePrices[d.symbol]) {
+        const tkp = $("tkp-" + d.symbol);
+        if (tkp && d.priceUsd) {
+          tkp.textContent = fmtPrice(d.priceUsd);
+          const tkc = $("tkc-" + d.symbol);
+          if (tkc) { tkc.textContent = pct(d.pct24h) + " 24h · CMC"; tkc.className = "c " + cls(d.pct24h); }
+        }
+      }
+    }
+
     $("decisions").innerHTML = state.decisions.map((d) => `<tr>
       <td class="sym">${d.symbol}${d.trending ? ' <span class="fire">🔥</span>' : ""}</td>
       <td class="act-${d.action}">${d.action}</td>
