@@ -186,12 +186,15 @@
       <div class="symtabs" id="symtabs"></div>
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;flex-wrap:wrap">
         <div class="symtabs" id="ivtabs" style="margin-bottom:0"></div>
-        <button class="symtab" id="autobtn" onclick="toggleAuto()" style="margin-left:auto">⟫ AUTO</button>
+        <button class="symtab active" id="view-triton" onclick="setChartView('triton')" style="margin-left:auto">🔱 TRITON</button>
+        <button class="symtab" id="view-tv" onclick="setChartView('tv')" title="Herramientas de dibujo, fibonacci, medición %">📐 TRADINGVIEW</button>
+        <button class="symtab" id="autobtn" onclick="toggleAuto()">⟫ AUTO</button>
       </div>
-      <div style="position:relative">
+      <div style="position:relative" id="tritonview">
         <div id="ohlc" style="position:absolute;top:6px;left:8px;z-index:5;font-family:var(--mono);font-size:11.5px;color:var(--dim)"></div>
         <div id="candles" style="width:100%;height:340px"></div>
       </div>
+      <div id="tvview" style="display:none;height:480px"><div id="tvchart" style="height:100%"></div></div>
     </div>
     <div class="panel">
       <h2>Equity Curve <span class="hint" id="equityHint"></span></h2>
@@ -751,6 +754,38 @@ async function selectSymbol(sym) {
   currentSym = sym;
   document.querySelectorAll("#symtabs .symtab").forEach((b) => b.classList.toggle("active", b.id === "st-" + sym));
   await loadCandles();
+  if (chartView === "tv") loadTvWidget();
+}
+
+/* ---------- TradingView view (drawing tools, fib, measure) ---------- */
+let chartView = "triton", tvLoaded = false;
+const TV_EXCHANGE = { TWT: "GATEIO" }; // pares sin spot en Binance
+function setChartView(v) {
+  chartView = v;
+  $("tritonview").style.display = v === "triton" ? "" : "none";
+  $("tvview").style.display = v === "tv" ? "" : "none";
+  $("view-triton").classList.toggle("active", v === "triton");
+  $("view-tv").classList.toggle("active", v === "tv");
+  if (v === "tv") loadTvWidget();
+}
+function loadTvWidget() {
+  const init = () => {
+    $("tvchart").innerHTML = "";
+    const ivMap = { "1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", "1d": "D" };
+    new TradingView.widget({
+      container_id: "tvchart",
+      symbol: (TV_EXCHANGE[currentSym] || "BINANCE") + ":" + currentSym + "USDT",
+      interval: ivMap[currentIv] || "5",
+      theme: "dark", style: "1", locale: "es", autosize: true,
+      hide_side_toolbar: false, allow_symbol_change: false,
+      backgroundColor: "#0a0f16",
+    });
+  };
+  if (tvLoaded) return init();
+  const s = document.createElement("script");
+  s.src = "https://s3.tradingview.com/tv.js";
+  s.onload = () => { tvLoaded = true; init(); };
+  document.head.appendChild(s);
 }
 
 async function selectInterval(iv) {
