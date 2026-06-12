@@ -201,6 +201,10 @@
       <div id="chart"></div>
     </div>
     <div class="panel">
+      <h2>Track Record <span class="hint">prop-firm metrics, computed from the real equity curve · since <span id="trsince">—</span></span></h2>
+      <div class="kpis" id="trgrid" style="margin-bottom:0"></div>
+    </div>
+    <div class="panel">
       <h2>Signals &amp; Decisions <span class="hint"><span class="livedot"></span>live prices · agent re-scores every 5 min</span></h2>
       <table>
         <thead><tr><th>Token</th><th>Action</th><th>Conf</th><th>Live Price</th><th>1h</th><th>24h</th><th>7d</th><th>Why</th></tr></thead>
@@ -463,6 +467,33 @@ async function refresh() {
     $("positions").innerHTML = p.positions.length
       ? p.positions.map((x) => `<tr><td class="sym">${x.symbol}</td><td class="num">${x.qty.toFixed(5)}</td><td class="num">${usd(x.avgEntryUsd)}</td><td class="num">${usd(x.currentUsd)}</td><td class="num ${cls(x.pnlPct)}">${pct(x.pnlPct)}</td></tr>`).join("")
       : '<tr><td colspan="5" class="empty">In cash — discipline is a position</td></tr>';
+
+    // Track Record — métricas estilo prop firm publicadas por el agente
+    const tr = state.trackRecord;
+    if (tr) {
+      $("trsince").textContent = tr.sinceIso.slice(0, 10) + " (" + tr.days.toFixed(1) + "d)";
+      const f = (n, d = 2) => (n == null ? "—" : n.toFixed(d));
+      const cell = (l, v, c = "", s = "") =>
+        `<div class="kpi"><div class="l">${l}</div><div class="v num ${c}">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+      $("trgrid").innerHTML = [
+        cell("Total Return", tr.totalReturnPct == null ? "—" : pct(tr.totalReturnPct), cls(tr.totalReturnPct)),
+        cell("Annualized", tr.annualizedReturnPct == null ? "—" : pct(tr.annualizedReturnPct), tr.annualizedReturnPct == null ? "" : cls(tr.annualizedReturnPct), tr.annualizedReturnPct == null ? "needs 7d+ history" : ""),
+        cell("Max Drawdown", "-" + f(tr.maxDrawdownPct) + "%", tr.maxDrawdownPct > 10 ? "neg" : ""),
+        cell("Current DD", "-" + f(tr.currentDrawdownPct) + "%"),
+        cell("Sharpe", f(tr.sharpe), tr.sharpe == null ? "" : cls(tr.sharpe), tr.sharpe == null ? "needs 5d+ history" : "annualized, rf=0"),
+        cell("Sortino", f(tr.sortino), tr.sortino == null ? "" : cls(tr.sortino)),
+        cell("Calmar", f(tr.calmar), tr.calmar == null ? "" : cls(tr.calmar)),
+        cell("Daily Vol", tr.dailyVolPct == null ? "—" : f(tr.dailyVolPct) + "%"),
+        cell("Best Day", tr.bestDayPct == null ? "—" : pct(tr.bestDayPct), "pos"),
+        cell("Worst Day", tr.worstDayPct == null ? "—" : pct(tr.worstDayPct), "neg"),
+        cell("Avg Exposure", f(tr.avgExposurePct, 0) + "%", "", "rest sits in USDT"),
+        cell("Win Rate", tr.winRatePct == null ? "—" : f(tr.winRatePct, 0) + "%", "", tr.closedTrades + " closed trades"),
+        cell("Profit Factor", f(tr.profitFactor)),
+        cell("Expectancy", tr.expectancyUsd == null ? "—" : (tr.expectancyUsd >= 0 ? "+$" : "-$") + Math.abs(tr.expectancyUsd).toFixed(2), cls(tr.expectancyUsd ?? 0), "per closed trade"),
+        cell("Avg Hold", tr.avgHoldHours == null ? "—" : f(tr.avgHoldHours, 1) + "h"),
+        cell("Worst Streak", tr.maxConsecLosses == null ? "—" : tr.maxConsecLosses + " losses"),
+      ].join("");
+    }
 
     // Fallback de la cinta: símbolos sin stream de Binance usan el precio CMC del agente
     for (const d of state.decisions) {
