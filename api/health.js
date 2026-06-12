@@ -6,7 +6,7 @@ import { head } from "@vercel/blob";
 export default async function handler(_req, res) {
   res.setHeader("Cache-Control", "no-store");
   try {
-    const blob = await head("triton-state.json");
+    const blob = await head(process.env.STATE_BLOB_KEY ?? "triton-state.json");
     const data = await fetch(`${blob.url}?t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json());
     const ageMin = (Date.now() - Date.parse(data?.state?.lastTick ?? 0)) / 60000;
     if (Number.isFinite(ageMin) && ageMin < 15) {

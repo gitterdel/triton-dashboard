@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   const body = req.body;
   if (!body || !body.state) return res.status(400).json({ error: "missing state" });
 
-  await put("triton-state.json", JSON.stringify(body), {
+  await put(process.env.STATE_BLOB_KEY ?? "triton-state.json", JSON.stringify(body), {
     access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
